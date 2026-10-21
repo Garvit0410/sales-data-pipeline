@@ -23,8 +23,7 @@ sales-data-pipeline/
 │   ├── test_aggregations.py
 │   ├── test_pipeline_e2e.py
 │   └── run_tests.ipynb                    run the tests from Databricks
-└── results/                               CSV output of every table and report
-​```
+└── results/                               CSV output of every table and report```
 
 ## How to run
 
