@@ -4,7 +4,7 @@ PySpark pipeline that turns raw customer, product and order files into clean tab
 
 ## Project structure
 
-​```
+```
 sales-data-pipeline/
 ├── data/                                  raw input files
 │   ├── Customer.xlsx
@@ -23,7 +23,8 @@ sales-data-pipeline/
 │   ├── test_aggregations.py
 │   ├── test_pipeline_e2e.py
 │   └── run_tests.ipynb                    run the tests from Databricks
-└── results/                               CSV output of every table and report```
+└── results/                               CSV output of every table and report
+```
 
 ## How to run
 
