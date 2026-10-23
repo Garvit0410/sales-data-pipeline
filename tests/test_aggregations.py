@@ -3,6 +3,8 @@ import importlib
 import pytest
 from pyspark.sql import functions as F
 
+enrich = importlib.import_module("2_enrich_customers_products")
+enrich_orders = importlib.import_module("3_enrich_orders")
 aggregate_step = importlib.import_module("4_profit_aggregate")
 sql_step = importlib.import_module("5_sql_outputs")
 
@@ -112,3 +114,21 @@ def test_all_reports_have_the_same_total(reports):
 def test_profit_by_customer_is_sorted_high_to_low(reports):
     values = [r["total_profit"] for r in reports["customer"].collect()]
     assert values == sorted(values, reverse=True)
+
+
+def test_duplicate_orders_do_not_double_the_profit(df_raw_orders, df_raw_customers, df_raw_products):
+    def total_profit(df_raw):
+        df_orders = enrich_orders.build_enriched_orders(
+            df_raw, enrich.enrich_customers(df_raw_customers), enrich.enrich_products(df_raw_products))
+        df_out = aggregate_step.build_profit_aggregate(df_orders)
+        return df_out.agg(F.round(F.sum("total_profit"), 2)).first()[0]
+
+    assert total_profit(df_raw_orders.unionByName(df_raw_orders)) == total_profit(df_raw_orders)
+
+
+def test_reports_have_no_repeated_rows(reports):
+    keys = {"year": ["order_year"], "year_category": ["order_year", "category"],
+            "customer": ["customer_id"], "customer_year": ["customer_id", "order_year"]}
+    for name, columns in keys.items():
+        df_report = reports[name]
+        assert df_report.count() == df_report.select(*columns).distinct().count(), name

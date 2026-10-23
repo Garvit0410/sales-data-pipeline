@@ -1,5 +1,7 @@
 import os
+import shutil
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -42,6 +44,19 @@ def spark(tmp_path_factory):
 @pytest.fixture(scope="session")
 def data_dir() -> Path:
     return common.DATA_DIR
+
+
+@pytest.fixture()
+def scratch_dir(tmp_path):
+    # folder for small test files that Spark has to read
+    if not common.ON_DATABRICKS:
+        yield tmp_path
+        return
+    # Databricks cannot read /tmp, so use the Volume instead
+    folder = common.BASE_DIR / "test_files" / uuid.uuid4().hex
+    folder.mkdir(parents=True)
+    yield folder
+    shutil.rmtree(folder, ignore_errors=True)
 
 
 @pytest.fixture()

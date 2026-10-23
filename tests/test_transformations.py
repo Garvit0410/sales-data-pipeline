@@ -53,6 +53,14 @@ def test_customers_have_one_row_per_id(df_raw_customers):
     assert df_out.select("customer_id").distinct().count() == 3
 
 
+def test_customer_ids_with_extra_spaces_count_as_one(spark, df_raw_customers):
+    # " C2 " is the same customer as "C2"
+    df_spaced = df_raw_customers.withColumn(
+        "customer_id", F.when(F.col("customer_id") == "C2", " C2 ").otherwise(F.col("customer_id")))
+    df_both = df_spaced.unionByName(df_raw_customers.filter("customer_id = 'C2'"))
+    assert enrich.enrich_customers(df_both).filter("customer_id = 'C2'").count() == 1
+
+
 def test_customers_are_cleaned(df_raw_customers):
     rows = {r["customer_id"]: r for r in enrich.enrich_customers(df_raw_customers).collect()}
     assert rows["C2"]["customer_name"] == "Jim Smith"
@@ -75,6 +83,12 @@ def test_products_have_one_row_per_id(df_raw_products):
     df_out = enrich.enrich_products(df_raw_products)
     assert df_out.count() == 2
     assert df_out.select("product_id").distinct().count() == 2
+
+
+def test_product_ids_with_extra_spaces_count_as_one(df_raw_products):
+    df_spaced = df_raw_products.withColumn(
+        "product_id", F.when(F.col("state") == "Texas", " P1 ").otherwise(F.col("product_id")))
+    assert enrich.enrich_products(df_spaced).filter("product_id = 'P1'").count() == 1
 
 
 def test_product_values(df_raw_products):
@@ -107,6 +121,34 @@ def test_duplicate_orders_are_removed(df_raw_orders, df_raw_customers, df_raw_pr
         enrich.enrich_products(df_raw_products),
     )
     assert df_out.count() == 4
+
+
+def test_same_row_id_with_different_values_keeps_one_row(df_raw_orders, df_raw_customers, df_raw_products):
+    df_changed = df_raw_orders.filter("row_id = 1").withColumn("profit", F.lit(999.0))
+    df_out = enrich_orders.build_enriched_orders(
+        df_raw_orders.unionByName(df_changed),
+        enrich.enrich_customers(df_raw_customers),
+        enrich.enrich_products(df_raw_products),
+    )
+    assert df_out.filter("row_id = 1").count() == 1
+    assert df_out.count() == 4
+
+
+def test_duplicate_customers_in_lookup_do_not_repeat_orders(spark, df_raw_orders, df_raw_products):
+    # the lookup is passed in with a repeated customer id on purpose
+    df_lookup = spark.createDataFrame(
+        [("C1", "Ann", "US"), ("C1", "Ann Again", "US"), ("C2", "Bob", "US"), ("C3", "Cy", "US")],
+        "customer_id string, customer_name string, country string")
+    df_out = enrich_orders.build_enriched_orders(
+        df_raw_orders, df_lookup, enrich.enrich_products(df_raw_products))
+    assert df_out.count() == 4
+
+
+def test_customer_ids_with_spaces_in_orders_still_match(df_raw_orders, df_raw_customers, df_raw_products):
+    df_spaced = df_raw_orders.withColumn("customer_id", F.concat(F.lit(" "), "customer_id", F.lit(" ")))
+    df_out = enrich_orders.build_enriched_orders(
+        df_spaced, enrich.enrich_customers(df_raw_customers), enrich.enrich_products(df_raw_products))
+    assert df_out.filter("row_id = 1").first()["customer_name"] == "Tamara Willingham"
 
 
 def test_orders_without_row_id_are_dropped(spark, df_raw_orders, df_raw_customers, df_raw_products):
