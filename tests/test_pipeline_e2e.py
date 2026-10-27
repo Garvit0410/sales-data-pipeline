@@ -33,9 +33,10 @@ def write_products(scratch_dir, text):
     return str(path)
 
 
-def write_customers(scratch_dir, columns, postal_code="x"):
+def write_customers(folder, columns, postal_code="x"):
+    # pandas reads this file, not Spark, so a normal temp folder is fine
     row = [postal_code if c == "postal_code" else "C1" if c == "customer_id" else "x" for c in columns]
-    path = scratch_dir / "Customer.xlsx"
+    path = folder / "Customer.xlsx"
     pd.DataFrame([row], columns=columns).to_excel(path, index=False)
     return str(path)
 
@@ -127,10 +128,10 @@ def test_product_file_without_price_raises_value_error(spark, scratch_dir):
         ingestion.read_products(spark, path)
 
 
-def test_customer_file_without_id_raises_value_error(spark, scratch_dir):
+def test_customer_file_without_id_raises_value_error(spark, tmp_path):
     columns = [c for c in ingestion.CUSTOMER_COLUMNS if c != "customer_id"]
     with pytest.raises(ValueError, match="customer_id"):
-        ingestion.read_customers(spark, write_customers(scratch_dir, columns))
+        ingestion.read_customers(spark, write_customers(tmp_path, columns))
 
 
 @pytest.mark.parametrize("column, bad_value", [
@@ -159,8 +160,8 @@ def test_extra_columns_in_orders_are_ignored(spark, scratch_dir):
     assert ingestion.read_orders(spark, write_orders(scratch_dir, [row])).columns == ingestion.ORDER_COLUMNS
 
 
-def test_customer_leading_zero_is_kept(spark, scratch_dir):
-    path = write_customers(scratch_dir, ingestion.CUSTOMER_COLUMNS, postal_code="02101")
+def test_customer_leading_zero_is_kept(spark, tmp_path):
+    path = write_customers(tmp_path, ingestion.CUSTOMER_COLUMNS, postal_code="02101")
     assert ingestion.read_customers(spark, path).first()["postal_code"] == "02101"
 
 
